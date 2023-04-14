@@ -1,0 +1,10 @@
+version: "3.9"
+
+services:
+  sketchviz:
+    build: .
+    image: sketchviz
+    container_name: sketchviz
+    volumes:
+      - ./input:/sketchviz/input
+      - ./output:/sketchviz/output

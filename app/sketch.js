@@ -170,47 +170,59 @@ function sketchy(data) {
 
 function main() {
     if (process.argv.length != 4) {
-        console.log("Usage: node sketch.js <input.dot> <output.svg>");
+        console.log("Usage: node sketch.js <input_dir> <output_dir>");
         process.exit(1);
     }
     var args = process.argv.slice(2);
     const { spawn } = require('child_process');
     function run(input, output) {
-        const dot = spawn('dot', ['-Tsvg', input]);
+        fs.stat(input, function(err, stat) {
+            if (err == null) {
+                const dot = spawn('dot', ['-Tsvg', input]);
 
-        dot.stderr.on('data', (data) => {
-            console.log(data.toString().split("\n").filter(x => x).map(x => "dot> " + x).join("\n"));
-        });
-        let buffer = "";
-        dot.stdout.on('data', (data) => {
-            buffer += data.toString();
-        });
-        dot.on('close', () => {
-            let result = preprocess(buffer.toString());
-            fs.writeFile(output, sketchy(result), function (err) {
-                if (err) {
-                    console.log(err);
-                    process.exit(1);
-                }
-                console.log("Written as '" + output + "'.");
-            });
-        });
-        fs.readFile(input, {}, function (err, data) {
-            if (err) {
-                console.log(err);
-                process.exit(1);
+                dot.stderr.on('data', (data) => {
+                    console.log(data.toString().split("\n").filter(x => x).map(x => "dot> " + x).join("\n"));
+                });
+                let buffer = "";
+                dot.stdout.on('data', (data) => {
+                    buffer += data.toString();
+                });
+                dot.on('close', () => {
+                    let result = preprocess(buffer.toString());
+                    fs.writeFile(output, sketchy(result), function (err) {
+                        if (err) {
+                            console.log(err);
+                            process.exit(1);
+                        }
+                    });
+                });
+                fs.readFile(input, {}, function (err, data) {
+                    if (err) {
+                        console.log(err);
+                        process.exit(1);
+                    }
+                    dot.stdin.write(data.toString());
+                    dot.stdin.end();
+                });
             }
-            dot.stdin.write(data.toString());
-            dot.stdin.end();
         });
     }
-
-    run(args[0], args[1]);
-    console.log("Now watching '" + args[0] + "' !");
+    // process existing dot files
+    var files = fs.readdirSync(args[0]);
+    for (i in files) {
+        if (files[i].endsWith(".dot")) {
+            input = args[0].concat(files[i]);
+            output = args[1].concat(files[i].slice(0, -3).concat("svg"));
+            run(input, output);
+        }
+    }
+    // watch for new dot files
+    console.log("Now watching '" + args[0] + "' for changes");
     fs.watch(args[0], (event, filename) => {
-        if (filename) {
-            console.log("File changed! Computing...");
-            run(args[0], args[1]);
+        if (filename.endsWith(".dot") && event=="change") {
+            input = args[0].concat(filename);
+            output = args[1].concat(filename.slice(0, -3).concat("svg"));
+            run(input, output);
         }
     });
 }
